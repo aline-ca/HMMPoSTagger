@@ -102,11 +102,14 @@ class HMMGenerator
     @param filename Pointer to file that will be read from
   */
   void read_in_file(const char* filename) {
-    if (filename != 0) {                        // If pointer is no null pointer
+      
+    if (filename != 0) {                        // If pointer is no null pointer 
       std::string line;                         // Current line in file
       StringVector vec;                         // Vector that saves the current line
       std::ifstream in(filename);               // Ifstream object constructed from file  
+      
       if (in.is_open()) {                       // If it was possible to open the file
+          
         while (getline(in,line)) {              // Read in each line seperately
           char_separator<char> sep("\t");       // Define tab field separator    
           // Tokenizer constructed from current line and defined separator: 
@@ -114,13 +117,17 @@ class HMMGenerator
           vec.assign(tok.begin(),tok.end());    // Assign current line to vector
           // Ignore all lines that do not have exactly two fields (word and pos tag):
           if (vec.size() != 2) continue;
+          
           const std::string& word = vec[0];     // Current word
           const std::string& pos_tag = vec[1];  // Current pos tag
+          
           word_seq.push_back(word);             // Append word to word sequence
           pos_seq.push_back(pos_tag);           // Append pos tag to pos sequence
+          
           // Increase type and token counter by one:
           ++type_counter_map[pos_tag];
           ++token_counter;
+          
           // Pointer to tuple that represents reading pos_tag and emitting word at the same time: 
           auto observation = std::make_tuple(pos_tag, word);  
           // Increment map counter at that position:
@@ -146,12 +153,14 @@ class HMMGenerator
   */
   void generate_tsv_file(const char* filename) const 
   {
+      
     if (filename != 0) {              // If pointer is no null pointer
       std::ofstream out(filename);    // Ofstream object created from file
+      
       if (out.is_open()) {            // If it was possible to open the file
-
         // Write all transitions into file by iterating over bigram-probability map:
         out << "\nTransitions:\n";
+        
         for (auto e = ml_map.begin(); e != ml_map.end(); ++e) {
           std::string tag1;           // First tag of bigram
           std::string tag2;           // Second tag of bigram
@@ -162,6 +171,7 @@ class HMMGenerator
 
         // Write all state-symbol mappings into file by iterating over tag state map:
         out << "\nState Symbol Map:\n";
+        
         for (auto e = tag_state_map.begin(); e != tag_state_map.end(); ++e) {
             out << e->second << "\t" << e->first << "\n"; 
         }
@@ -169,6 +179,7 @@ class HMMGenerator
 
         // Write all observations into file by iterating over word likelihood map:
         out << "\nObservations:\n";
+        
         for (auto e = word_likelihood_map.begin(); e != word_likelihood_map.end(); ++e) {
           std::string tag;        // Current tag
           std::string word;       // Current word
@@ -179,11 +190,11 @@ class HMMGenerator
 
         // Write all initial probabilities into file by iterating over init_probs map:
         out << "\nInitial Probabilities:\n";
+        
         for (auto e = init_probs.begin(); e != init_probs.end(); ++e) {
             out << get_state(e->first) << "\t" << e->second << "\n";  
         }
         out.close();
-
       }
       else {std::cerr << "Unable to open '" << filename << "'\n";}
      }
@@ -194,11 +205,13 @@ class HMMGenerator
   /**
     @brief Finds all bigrams that occurred in the file and counts them.
   */
-  void get_bigrams () {
+  void get_bigrams () {   
     // The very first tag is in position[0].
-    std::string previous_tag = pos_seq[0];      // Saves the tag that occurred before the current word  
+    std::string previous_tag = pos_seq[0];      // Saves the tag that occurred before the current word 
+    
     // Iterate over pos sequence, starting at the second word:
-    for (unsigned i = 1; i < token_counter; ++i) {
+    for (unsigned i = 1; i < token_counter; ++i) {     
+        
       // Pointer to the bigram that consists of the previous and current tag:
       auto bigram = std::make_tuple(previous_tag, pos_seq[i]);
       // Increment counter and make the current tag the new previous tag:
@@ -217,6 +230,7 @@ class HMMGenerator
   void compute_mle() {
     // Smoothing = true, compute all possible bigram probabilities:
     if (smoothing == true) {
+        
       // The vocabulary size multiplied with specified smoothing summand:
       float V = (float(type_counter_map.size()) * smoothing_summand);
 
@@ -230,6 +244,7 @@ class HMMGenerator
 
           // Pointer to current bigram in bigram_counter_map:
           auto it = bigram_counter_map.find(bigram);
+          
           // If we found an entry for the bigram, use its count for the computation:
           if (it != bigram_counter_map.end()) {
             ml_map[bigram] = (double(it->second) + smoothing_summand) / double(type_counter_map[tag1] + V);
@@ -250,8 +265,10 @@ class HMMGenerator
       for (auto e = bigram_counter_map.begin(); e != bigram_counter_map.end(); ++e) {
         std::string tag1;       // First tag of bigram
         std::string tag2;       // Second tag of bigram
+        
         // Use std::tie to unpack tuple into variable:
         std::tie (tag1, tag2) = (e->first);
+        
         // Computation: The maximum likelihood estimation of a bigram consisting of
         // tag1 and tag2 is the number of all occurrences of this bigramm divided by
         // the number of all occurrences of word 1.
@@ -265,12 +282,15 @@ class HMMGenerator
     @brief Computes the word likelihood for all observed words in the training data.
   */
   void compute_word_likelihood() {
+      
     // Iterate over all observation tuples:
     for (auto e = observation_counter_map.begin(); e != observation_counter_map.end(); ++e) {
       std::string pos_tag;        // First tuple component: pos tag
       std::string word;           // Second tuple component: word
+      
       // Use std::tie to unpack tuple into variable:
       std::tie (pos_tag, word) = (e->first);
+      
       // Computation: The word likelihood of a pos tag and word tuple is the number of all occurrences
       // of this tuple divided by the number of all occurrences of the pos tag.
       word_likelihood_map[(e->first)] = double(e->second) / double(type_counter_map[pos_tag]);
@@ -286,15 +306,18 @@ class HMMGenerator
           is enabled, we take all the smoothed BOS-state-transitions and save them.
   */      
   void get_init_probs() {
+      
     // We iterate over the map that saves the transitions:
     for (auto e = ml_map.begin(); e != ml_map.end(); ++e) {
       std::string tag1;                       // First tag of bigram
       std::string tag2;                       // Second tag of bigram
       std::tie (tag1, tag2) = (e->first);
+      
       // If the first tag is BOS, the second tag is a start state:
       if (tag1 == "<BOS>") {
         // Check whether second tag is in init probs map:
         auto it = init_probs.find(tag2);      // Pointer to the position of the specified tag in the map
+        
         // If it is in there, overwrite the zero probability with the probability of the transition:
         if (it != init_probs.end()) {
           init_probs[tag2] = e->second;
@@ -318,7 +341,8 @@ class HMMGenerator
     @brief Creates the map that maps all pos tags to their state index.
   */
   void build_tag_state_map() {
-    unsigned state_index = 0;     // Current state index    
+    unsigned state_index = 0;     // Current state index  
+    
     // Iterate over all pos-tags: 
     for (auto e = type_counter_map.begin(); e != type_counter_map.end(); ++e) {
       // Save a mapping from current tag to current index, then increment index:
@@ -337,6 +361,7 @@ class HMMGenerator
   {
     // Pointer to the position of the specified tag in the map:
     auto it = tag_state_map.find(tag);
+    
     if (it != tag_state_map.end()) return it->second;  
     else {
       std::cerr << "ERROR: No state representation for pos tag " << tag << " found.\n";
