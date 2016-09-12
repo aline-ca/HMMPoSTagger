@@ -13,7 +13,6 @@
 /* 
   TODO: 
     - Implement better smoothing algorithm (Good Turing, Witten-Bell or Absolute Discounting)
-    - Add test whether tsv file really uses tabs as separators (otherwise segmentation fault)
 */
 
 #ifndef __HMM_GENERATOR_HPP__
@@ -29,6 +28,7 @@
 #include <tuple>                // std::tuple (requires C++11)
 #include <vector>               // std::vector
 #include <map>                  // std::map
+#include <set>                  // std::set
 
 using namespace boost;
 
@@ -49,6 +49,7 @@ class HMMGenerator
  private: // Typedefs
   typedef std::vector<std::string>            StringVector;       ///< String vector for reading in tags and words
   typedef std::tuple<std::string,std::string> BigramTuple;        ///< String tuple as bigram representation
+  typedef std::set<std::string>               StringSet;          ///< String set for all observed words.
   typedef std::map<std::string,int>           StringIntMap;       ///< String-to-int map for counting word occurrences
   typedef std::map<BigramTuple,int>           TupleIntMap;        ///< Tuple-to-int map for counting bigrams and observations
   typedef std::map<std::string,double>        StringDoubleMap;    ///< String-to-double map for saving initial probabilities
@@ -61,6 +62,7 @@ class HMMGenerator
   StringIntMap      type_counter_map;         ///< Maps a pos tag to the number of its occurrences
   StringVector      pos_seq;                  ///< Vector of all PoS tags in the order they occurred in the corpus
   StringVector      word_seq;                 ///< Vector of all words in the order they occurred in the corpus
+  StringSet         observed_words_set;       ///< Set that saves all observed words
   TupleIntMap       bigram_counter_map;       ///< Maps a bigram to the number of its occurrences 
   TupleIntMap       observation_counter_map;  ///< Maps a tag-word-tuple to the number of its occurrences
   TupleDoubleMap    ml_map;                   ///< Saves maximum likelihood 
@@ -128,6 +130,11 @@ class HMMGenerator
           ++type_counter_map[pos_tag];
           ++token_counter;
           
+          // Add observed word to the set:          
+         if (observed_words_set.find(word) == observed_words_set.end()) {
+             observed_words_set.insert(word); 
+         }
+          
           // Pointer to tuple that represents reading pos_tag and emitting word at the same time: 
           auto observation = std::make_tuple(pos_tag, word);  
           // Increment map counter at that position:
@@ -158,6 +165,10 @@ class HMMGenerator
       std::ofstream out(filename);    // Ofstream object created from file
       
       if (out.is_open()) {            // If it was possible to open the file
+          
+        // Write metadata (num of states + num of observations)
+        out << "#\t" << tag_state_map.size() << "\t" << observed_words_set.size() << "\n";
+                
         // Write all transitions into file by iterating over bigram-probability map:
         out << "\nTransitions:\n";
         
