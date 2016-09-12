@@ -113,7 +113,7 @@ class HMMGenerator
       if (in.is_open()) {                       // If it was possible to open the file
           
         while (getline(in,line)) {              // Read in each line seperately
-          char_separator<char> sep("\t");       // Define tab field separator    
+          char_separator<char> sep("\t ");      // Define tab and space field separators    
           // Tokenizer constructed from current line and defined separator: 
           Tokenizer tok(line, sep);
           vec.assign(tok.begin(),tok.end());    // Assign current line to vector
