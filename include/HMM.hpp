@@ -14,7 +14,6 @@
   TODO: 
     - Implement logarithmic probabilities for higher precision and to prevent numeric overflow
     - Change static storage implementation to dynamic storage
-    - Reserve probability mass for unseen words in test data
     - Escape line separator sign (~)
 */
 
@@ -33,6 +32,7 @@
 
 #define MAXTRANSITIONS                      50
 #define MAXOBSERVATIONS                     50000
+#define UNSEENWORDPROB                      0.01
 
 using namespace boost;
 
@@ -45,7 +45,7 @@ using namespace boost;
   @note Although add-one is used to smooth unseen transitions for all words in the training data, the
         HMM can NOT yet handle completely unseen words in the test data. Unseen words will result in
         a zero probability for the complete test data.
-  @note The tilde sign is used as separator sign between the different phases of reading in the HMM.
+  @note The tilde sign is used as sezparator sign between the different phases of reading in the HMM.
         It was specifically chosen because it did not occur in any training data, including the whole
         section 02-21 of the Wall Street Journal. If a tilde occurs in the training data, the 
         HMMGenerator class will be able to integrate it in the HMM correctly, but the file cannot be
@@ -69,7 +69,9 @@ class HMM
   typedef std::tuple<unsigned,unsigned>     UnsignedTuple;        ///< Represents a transition from one state to another
   typedef std::vector<UnsignedTuple>        TupleVector;          ///< Vector of state-tuples
   typedef std::map<State,double>            StateDoubleMap;       ///< Maps a state to a probability (init probs)
-  typedef numeric::ublas::matrix<double>    Matrix;               ///< Matrix of double values (probabilities)
+  
+  typedef numeric::ublas::matrix<double>    Matrix;               ///< Matrix of double values (probabilities)  
+  
   typedef numeric::ublas::matrix<State>     StateMatrix;          ///< Matrix of states (for backpointer trellis)
   typedef tokenizer< char_separator<char> > Tokenizer;            ///< Boost tokenizer for reading in data
 
@@ -246,7 +248,7 @@ class HMM
     @param file Reference to the file that contains the test data.
     @return Most probable hidden state sequence as string.
   */
-  /// Compute the best path for a given observation sequence and HMM. TODO
+  /// Compute the best path for a given observation sequence and HMM.
   const std::string viterbi(const std::string& file) {
     std::ifstream in(file.c_str());   ///< Ifstream object created from file
     if (in) {
@@ -257,17 +259,25 @@ class HMM
       Matrix viterbi(N,T);                            // Viterbi trellis
       StateMatrix backpointer(N,T);                   // Backpointer trellis
       
-      if (debug_mode) { std::cout << "COMPUTING BEST PATH FOR GIVEN OBSERVATION SEQUENCE.\n"; }
+      std::cout << "----------------------------------------------------------------------" << "\n";
+      std::cout << "COMPUTING THE BEST PATH FOR FOLLOWING OBSERVATION SEQUENCE:\n";
+      for (auto it = observations.begin(); it != observations.end(); ++it) {
+  	std::cout << *it << ' ';
+      }
+      std::cout << "\n\n";
 
       // Initalization: Probability to start in state i * probability to emit
       // first observation (observations[0]) in state i.
       for (unsigned i = 0; i < N; ++i) {
         // If we get the invalid word index -1, we know that the word did not occur in the training data.
-        // So the probability to start in it is zero.
-        if (get_word_index(observations[0]) == -1) { viterbi(i,0) = init_probs[i] * 0; } 
+        // The actual probability to start in it would be 0, but then we will always multiply by this 0
+        // and only get zero probabilities. Because of this, use constant UNSEENWORDPROB for multiplication instead.
+        if (get_word_index(observations[0]) == -1) { viterbi(i,0) = init_probs[i] * UNSEENWORDPROB; } 
         else {
           viterbi(i,0) = init_probs[i] * observation_matrix(i,get_word_index(observations[0]));
         }
+        // (This step is actually not necessary because we will never use the first row
+        // of the backpointer trellis because it does not point to any previous state.)
         backpointer(i,0) = 0;
       }
 
@@ -278,9 +288,9 @@ class HMM
           double best_state_prob = 0;                 // Probability of current best state (for backpointer trellis)
           State best_state;                           // Value that will be written in current backpointer trellis cell
           for (unsigned j = 0; j < N; ++j) {          // j represents previous state
-            // Again, test whether word has an entry in the HMM, and if not, use a zero probability.
+            // Again, test whether word has an entry in the HMM.
             if (get_word_index(observations[t]) == -1) { 
-              maximum = std::max(maximum, viterbi(j,t-1) * transition_matrix(j,s) * 0);
+              maximum = std::max(maximum, viterbi(j,t-1) * transition_matrix(j,s) * UNSEENWORDPROB);
             }
             else {
               // Compute previous sum + forward probability at previous trellis position * transition probability 
@@ -339,12 +349,12 @@ class HMM
       std::reverse(path.begin(),path.end());
 
       // Get the result sequence by concatenating all string representations of the state path:   
-      std::string result = get_string_repr(path); 
-      if (debug_mode) {
-        std::cout << "Result: " << result << "\n"
-               << "----------------------------------------------------------------------" << "\n";
-      }
-    return result;
+      std::string result = get_string_repr(path);
+      
+      std::cout << "THE MOST PROBABLE HIDDEN STATE SEQUENCE IS:\n"
+                <<  result << "\n"
+                << "----------------------------------------------------------------------" << "\n";
+      return result;
     }
     else {
       std::cerr << "Error: Unable to open '" << file << "'\n";
@@ -364,6 +374,7 @@ class HMM
   void read_in(std::istream& in) {    
     StringVector vec;                       // Vector that reads in lines
     std::string line;                       // Current line
+    std::cout << line;
     unsigned separator_counter = 0;         // Counts occurred lines of number signs (separators)
     while (getline(in,line)) {              // Read in each line seperately
       char_separator<char> sep("\t");       // Define tab field separator

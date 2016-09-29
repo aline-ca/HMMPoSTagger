@@ -36,10 +36,10 @@ int main (int argc, char* argv[])
 		std::cerr << 
       "USAGE: generate_hmm.cpp training_file output_file \n"
       "The training file has to contain one word and its corresponding pos tag "
-      "per line, seperated by a tabulator. Each beginning and end of a sentence "
-      "in the data must be marked with an additional <BOS> <BOS> and " 
-      "respectively <EOS> <EOS> pair also seperated by tabulators. Some example "
-      "files are included in /data. \n";
+      "per line, seperated by tabulators or spaces. Each beginning and end of a "
+      "sentence in the data must be marked with an additional <BOS> <BOS> and " 
+      "respectively <EOS> <EOS> pair also seperated by tabulators. \n"
+      "Some example files are included in /data. \n";
     exit(1);
 	}
 	return 0;
