@@ -13,7 +13,6 @@
 /* 
   TODO: 
     - Implement logarithmic probabilities for higher precision and to prevent numeric overflow
-    - Change static storage implementation to dynamic storage
     - Escape line separator sign (~)
 */
 
@@ -30,8 +29,6 @@
 #include <fstream>                          // std::fstream
 #include <cstdlib>                          // abort(), exit()
 
-#define MAXTRANSITIONS                      50
-#define MAXOBSERVATIONS                     50000
 #define UNSEENWORDPROB                      0.01
 
 using namespace boost;
@@ -65,50 +62,48 @@ class HMM
   typedef std::map<State,HiddenSymbol>      StateSymbolMap;       ///< Maps a state number to its string representation 
   typedef std::map<HiddenSymbol,State>      SymbolStateMap;       ///< Maps a state as string representation to its number
   typedef std::vector<std::string>          StringVector;         ///< String vector (mostly for saving observations)
+  typedef std::vector<StringVector>         StringVectorVector;
   typedef std::vector<State>                StateVector;          ///< Vector of state numbers
+  typedef std::vector<double>               DoubleVector;         ///< Vector of double values
   typedef std::tuple<unsigned,unsigned>     UnsignedTuple;        ///< Represents a transition from one state to another
   typedef std::vector<UnsignedTuple>        TupleVector;          ///< Vector of state-tuples
   typedef std::map<State,double>            StateDoubleMap;       ///< Maps a state to a probability (init probs)
   
-  typedef numeric::ublas::matrix<double>    Matrix;               ///< Matrix of double values (probabilities)  
-  
+  typedef numeric::ublas::matrix<double>    Matrix;               ///< Matrix of double values (probabilities)
   typedef numeric::ublas::matrix<State>     StateMatrix;          ///< Matrix of states (for backpointer trellis)
+  
   typedef tokenizer< char_separator<char> > Tokenizer;            ///< Boost tokenizer for reading in data
 
 
  private: // Types
-  Matrix          transition_matrix;  ///< Maps two states to their transition probability
-  Matrix          observation_matrix; ///< Maps a state and a word index to their observation probability
-  WordIndexMap    word_index_map;     ///< Maps observed word to an index (used to represent word in the observation matrix)
-  Index           current_index;      ///< Generated index for mapping words to word_index_map
-  StateSymbolMap  state_symbol_map;   ///< Maps the unsigned representation of a state to its string representation   
-  SymbolStateMap  symbol_state_map;   ///< Maps the string representation of a state to its unsigned representation
-  StateDoubleMap  init_probs;         ///< Maps a state to its initial probability
-  unsigned        n_transitions;      ///< Number of transitions
-  unsigned        n_observations;     ///< Number of observations  
+  Matrix          transition_matrix;    ///< Maps two states to their transition probability
+  Matrix          observation_matrix;   ///< Maps a state and a word index to their observation probability
+  WordIndexMap    word_index_map;       ///< Maps observed word to an index (used to represent word in the observation matrix)
+  Index           current_index;        ///< Generated index for mapping words to word_index_map
+  StateSymbolMap  state_symbol_map;     ///< Maps the unsigned representation of a state to its string representation   
+  SymbolStateMap  symbol_state_map;     ///< Maps the string representation of a state to its unsigned representation
+  StateDoubleMap  init_probs;           ///< Maps a state to its initial probability
+  unsigned        num_of_states;        ///< Number of states
+  unsigned        num_of_observations;  ///< Number of observations
 
+  
  public: // Functions
-
   /**
     @brief Constructor that reads in a HMM from a tsv file.
     @param file Reference to the file that contains the HMM.
     @param d Debug mode that can be enabled if desired. Is set to false by default.
   */
   HMM(const std::string& file, bool d=false) {
+    
     debug_mode = d; 
     // Ifstream object constructed from file 
     std::ifstream in(file.c_str()); 
+    
     if (in) {
-      // Create matrices the size of specified max size:
-      transition_matrix.resize(MAXTRANSITIONS,MAXTRANSITIONS);
-      observation_matrix.resize(MAXTRANSITIONS,MAXOBSERVATIONS);
-      init();                                       // Initialize matrices
-      read_in(in);                                  // Read in data from file
-      n_transitions = state_symbol_map.size();      // Save number of transitions/observations
-      n_observations = word_index_map.size();
-      // Resize matrices to actual size (unused rows are erased): 
-      transition_matrix.resize(n_transitions, n_transitions);
-      observation_matrix.resize(n_transitions, n_observations);
+      init();                              // Initialize counters
+      read_in(in);                         // Read in HMM from file and build internal data structures
+      
+      std::cout << "HMM BUILD FROM FILE '" << file << "': SUCCESSFUL.\n";         
       if (debug_mode) { print(); }
     }
     else std::cerr << "Error: Unable to open '" << file << "'\n";  
@@ -116,17 +111,10 @@ class HMM
 
 
   /***************************************
-  *       Public Getter Functions        *
+  *          Public Functions            *
   ***************************************/
   
-  /**
-    @brief Gets forward probability.
-    @param file Reference to the file that contains the test data.
-    @return Probability of the observed sequence in the test data file.
-  */
-  const double get_forward_prob(const std::string& file) 
-    { return forward(file); }
-
+  
   /**
     @brief Gets most likely sequence of hidden states.
     @param file Reference to the file that contains the test data.
@@ -134,6 +122,14 @@ class HMM
   */
   const std::string get_most_likely_seq(const std::string& file) 
     { return viterbi(file); }
+
+  /**
+    @brief Gets a vector of forward probabilities for all the sentences in the test data.
+    @param file Reference to the file that contains the test data.
+    @return Vector of forward probabilities. 
+  */
+  const DoubleVector get_forward_probs(const std::string& file) 
+    {   return compute_forward_probs(file); }
 
 
   private: // Functions
@@ -156,12 +152,12 @@ class HMM
 
 
   /**
-    @brief Initializes word index, transition matrix and observation matrix.
+    @brief Initializes counter variables.
   */
   void init () {
     current_index = 0;
-    initialize_matrix(transition_matrix);
-    initialize_matrix(observation_matrix);
+    num_of_states = 0;
+    num_of_observations = 0;
   }
 
 
@@ -173,27 +169,30 @@ class HMM
   *          Forward Algorithm           *
   ***************************************/
   /**
-    @brief Computes forward probability for the trained HMM and given test data.
-            The test data gets read in from a file.
-    @param file Reference to the file that contains the test data.
-    @return Probability of the observed sequence in the test data file.
+    @brief Computes the forward probability for a single observed sentence.
+    @param observations Reference to the sentence saved in a string vector.
+    @return Probability of the observed sequence.
   */
-  const double forward(const std::string& file) {
-    std::ifstream in(file.c_str());   // Ifstream object created from file
-    if (in) {
-      // Vector containing the sequence of observations
-      const StringVector& observations = parse_test_data(in);
+  const double forward(const StringVector& observations) {
+      
       const unsigned& N = transition_matrix.size1();   // Number of states 
       const unsigned& T = observations.size();         // Number of time steps in the observation
       Matrix forward_trellis(N,T);                     // Forward trellis
-      if (debug_mode) { std::cout << "COMPUTING FORWARD PROBABILITY FOR GIVEN OBSERVATIONS.\n"; }
+      
+      std::cout << "----------------------------------------------------------------------" << "\n";
+      std::cout << "COMPUTING FORWARD PROBABILITY FOR FOLLOWING OBSERVATION SEQUENCE:\n";
+      for (auto it = observations.begin(); it != observations.end(); ++it) {
+  	std::cout << *it << ' ';
+      }
+      std::cout << "\n\n";
+      
       // Initalization: Probability to start in state i * probability to emit 
       // first observation (observations[0]) in state i.  
       for (unsigned i = 0; i < N; ++i) {
         // If we get the invalid word index -1, we know that the word did not occur in the training data.
         // So the probability to start in it is zero. Right now, this will result in a zero probability for
         // all the test data which is not very good...
-        if (get_word_index(observations[0]) == -1) { forward_trellis(i,0) = init_probs[i] * 0; }     
+        if (get_word_index(observations[0]) == -1) { forward_trellis(i,0) = init_probs[i] * UNSEENWORDPROB; }     
         else { forward_trellis(i,0) = init_probs[i] * observation_matrix(i,get_word_index(observations[0])); }
       }
       // Recursion Step (Iterative solution): 
@@ -203,7 +202,7 @@ class HMM
           for (unsigned j = 0; j < N; ++j) {          // j represents previous state
             // Again, test whether word has an entry in the HMM, and if not, use a zero probability.
             if (get_word_index(observations[t]) == -1) {
-              sum += forward_trellis(j,t-1) * transition_matrix(j,s) * 0;
+              sum += forward_trellis(j,t-1) * transition_matrix(j,s) * UNSEENWORDPROB;
             }
             else {                                    // Word has an entry in the HMM
               // Compute previous sum + forward probability at previous trellis position * transition probability from previous
@@ -216,26 +215,14 @@ class HMM
         }
       }
       if (debug_mode) { std::cout << "Complete trellis:\n" << forward_trellis << "\n";}
+      
       // Termination Step: Sum up all final forward probabilties (last cells in trellis).
       double result = 0;                              // Probability that will be returned
-      if (debug_mode) { std::cout << "Calculating final result:\n"; }
       for (unsigned i = 0; i < N; ++i) {
         result += forward_trellis(i,T-1);
-        if (debug_mode) { 
-          std::cout << forward_trellis(i,T-1);
-          if (i < N-1) {std::cout << " + ";}
-         }
       }
-      if (debug_mode) {
-        std::cout << " = " << result << "\n"
-               << "----------------------------------------------------------------------" << "\n";
-      }
+      std::cout << "THE FORWARD PROBABILITY IS:\n" << result << "\n";
       return result;
-    }
-    else {
-      std::cerr << "Error: Unable to open '" << file << "'\n";
-      exit(1);
-    }
   }
 
   /***************************************
@@ -374,12 +361,22 @@ class HMM
   void read_in(std::istream& in) {    
     StringVector vec;                       // Vector that reads in lines
     std::string line;                       // Current line
-    std::cout << line;
+    std::cout << "Call read_in Function\n";
     unsigned separator_counter = 0;         // Counts occurred lines of number signs (separators)
     while (getline(in,line)) {              // Read in each line seperately
-      char_separator<char> sep("\t");       // Define tab field separator
+          std::cout << line << "\n";
+
+        char_separator<char> sep("\t");       // Define tab field separator
       /// Tokenizer constructed from current line and defined separator:     
-      Tokenizer tok(line, sep);           
+      Tokenizer tok(line, sep); 
+      
+      // Get metadata from first line
+      if(line[0] == '#') {
+        vec.assign(tok.begin(),tok.end());  // Assign current line to vector    
+        build_hmm_matrices(vec);            // Build and initialize transition and observation matrix 
+        continue;
+      }    
+      
       if (line[0] != '~') {                 // If current line has no separator
         vec.assign(tok.begin(),tok.end());  // Assign current line to vector    
         // Ignore all lines that have less than two fields:
@@ -409,7 +406,27 @@ class HMM
     }
   }
 
+  /**
+    @brief Reads in metadata section at the beginning of the file to get the number of states and observations.
+           Resizes the transition and observation matrix to this size and initializes them.
+    @param v Reference to the vector.
+  */
+  void build_hmm_matrices(const StringVector& v) {
 
+    // Get number of states and number of observations: 
+    num_of_states = atoi(v[1].c_str());         // Convert strings to ints   
+    num_of_observations = atoi(v[2].c_str());
+
+    // Set the size of transition and observation matrix:
+    transition_matrix.resize(num_of_states,num_of_states);
+    observation_matrix.resize(num_of_states,num_of_observations);
+    
+    // Initialize matrices:
+    initialize_matrix(transition_matrix);
+    initialize_matrix(observation_matrix);   
+  }
+  
+  
   /**
     @brief Reads in transitions and transition probabilities from a vector.
     @param v Reference to the vector.
@@ -619,6 +636,74 @@ class HMM
     return vec;
   }
 
+  
+    /**
+    @brief Takes a test file as input and splits it up into sentences 
+           by looking for the <EOS> tag. Saves the single sentences as a vector
+           of string vectors.
+    @param file Reference to the file that contains the data that shall be 
+           split into sentences.
+    @return Vector of string vectors that contains the sentences.
+  */
+  const StringVectorVector get_sentences_from_file(const std::string& file)
+  {
+    std::ifstream in(file.c_str());
+    if (in) {
+        StringVectorVector all_sentences;         // Vector of all sentences
+        StringVector sentence;                    // Current sentence
+        std::string line;                         // Current line
+      
+        while (getline(in,line)) {      
+            if(line != "<EOS>") {
+                sentence.push_back(line);
+            }
+            else {
+                sentence.push_back(line);
+                all_sentences.push_back(sentence);
+                sentence.clear();
+            }        
+        }
+        return all_sentences;
+    }
+    else {
+        std::cerr << "Error: Unable to open '" << file << "'\n";
+        exit(1);
+    } 
+  }
+ 
+  /**
+    @brief Gets vector of forward probabilites by calling the forward() function 
+           for every single sentence in the vector.
+    @param sentences Vector of string vectors where every string vector represents a single sentence.
+    @return Vector of forward probabilities with one entry for every sentence.
+  */
+    const DoubleVector get_forward_probs_for_vector(StringVectorVector sentences)  
+    {       
+        DoubleVector all_forward_probs;
+        
+        for (auto it = sentences.begin(); it != sentences.end(); it++) {
+            double current_forward_prob = forward(*it);
+            all_forward_probs.push_back(current_forward_prob);
+        }        
+        return all_forward_probs;
+      
+    }  
+    
+    
+    /**
+    @brief Executes all necessary steps for calculating the forward probability of sentences 
+           in a file. Extracts the sentences from the file first and then calculates 
+           the forward probability of every sentence seperately.
+    @param file Reference to the file that contains the sentences.
+    @return Vector of forward probabilities with one entry for every sentence.
+  */
+    const DoubleVector compute_forward_probs(const std::string& file) 
+    {
+        StringVectorVector sentences = get_sentences_from_file(file);
+        DoubleVector forward_probs = get_forward_probs_for_vector(sentences);
+        return forward_probs; 
+    }
+  
 }; // HMM
 
 #endif
