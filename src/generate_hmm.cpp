@@ -25,10 +25,10 @@ int main (int argc, char* argv[])
       // HMMGenerator hmm_generator(argv[1],argv[2],false);
 
       // HMM generator instance that will perform standard add-one smoothing
-      HMMGenerator hmm_generator(argv[1], argv[2]);
+      //HMMGenerator hmm_generator(argv[1], argv[2]);
 
       // HMM generator instance that will perform smoothing with own specified summand
-      // HMMGenerator hmm_generator(argv[1],argv[2],true,0.75);
+      HMMGenerator hmm_generator(argv[1],argv[2],true,0.75);
    }
 
    else {
