@@ -165,7 +165,7 @@ private: // Functions
             if (out.is_open()) { // If it was possible to open the file
 
                 // Write metadata (num of states + num of observations)
-                out << "#\t" << tag_state_map.size() << "\t" << observed_words_set.size() << "\n";
+                out << "#\t" << tag_state_map.size() << "\t" << observed_words_set.size() << "\t#\n";
 
                 // Write all transitions into file by iterating over bigram-probability map:
                 out << "\nTransitions:\n";

@@ -370,8 +370,8 @@ class HMM
       /// Tokenizer constructed from current line and defined separator:     
       Tokenizer tok(line, sep); 
       
-      // Get metadata from first line
-      if(line[0] == '#') {
+      // Get metadata from first line (The structure of the line is: # States Observations #)
+      if(line[0] == '#' && line[line.length()-1] == '#') {
         vec.assign(tok.begin(),tok.end());  // Assign current line to vector    
         build_hmm_matrices(vec);            // Build and initialize transition and observation matrix 
         continue;
