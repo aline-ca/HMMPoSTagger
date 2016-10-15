@@ -181,12 +181,17 @@ public: // Functions
         const unsigned& T = observations.size();        // Number of time steps in the observation
         Matrix forward_trellis(N, T);                   // Forward trellis
 
-        std::cout << "----------------------------------------------------------------------" << "\n";
-        std::cout << "COMPUTING FORWARD PROBABILITY FOR FOLLOWING OBSERVATION SEQUENCE:\n";
+        std::cout << "COMPUTING FORWARD PROBABILITY FOR FOLLOWING SENTENCE:\n";
         for (auto it = observations.begin(); it != observations.end(); ++it) {
             std::cout << *it << ' ';
         }
         std::cout << "\n\n";
+
+        if (debug_mode) {
+            std::cout << "Length of observation:\t\t" << T << "\n"
+                      << "Size of forward trellis:\t" << forward_trellis.size1() 
+                      << " x " << forward_trellis.size2() << "\n\n";
+        }
 
         // Initalization: Probability to start in state i * probability to emit 
         // first observation (observations[0]) in state i.  
@@ -219,9 +224,6 @@ public: // Functions
                 forward_trellis(s, t) = sum;
             }
         }
-        if (debug_mode) {
-            std::cout << "Complete trellis:\n" << forward_trellis << "\n";
-        }
 
         // Termination Step: Sum up all final forward probabilties (last cells in trellis).
         double result = 0; // Probability that will be returned
@@ -229,6 +231,8 @@ public: // Functions
             result += forward_trellis(i, T - 1);
         }
         std::cout << "THE FORWARD PROBABILITY IS:\n" << result << "\n";
+        std::cout << "----------------------------------------------------------------------" << "\n";
+
         return result;
     }
 
