@@ -15,6 +15,7 @@
     - Use two nested vectors as matrix data structure (instead of boost library).
     - Implement logarithmic probabilities for higher precision and to prevent numeric overflow.
     - Add mechanism to compute the accuracy of predictions.
+    - Add different verbose modes instead of single debug switch.
  
   Known issues:
     - The ~ sign cannot occur in a trained HMM as observation because it is used 
@@ -50,7 +51,7 @@ using namespace boost;
   @note Although add-one is used to smooth unseen transitions for all words in the training data, the
         HMM can NOT yet handle completely unseen words in the test data. Unseen words will result in
         a zero probability for the complete test data.
-  @note The tilde sign is used as sezparator sign between the different phases of reading in the HMM.
+  @note The tilde sign is used as separator sign between the different phases of reading in the HMM.
         It was specifically chosen because it did not occur in any training data, including the whole
         section 02-21 of the Wall Street Journal. If a tilde occurs in the training data, the 
         HMMGenerator class will be able to integrate it in the HMM correctly, but the file cannot be
@@ -253,13 +254,7 @@ public: // Functions
             StateMatrix backpointer(N, T);                      // Backpointer trellis
 
             if (debug_mode) {
-                std::cout << "----------------------------------------------------------------------" << "\n";
-                std::cout << "COMPUTING THE BEST PATH FOR FOLLOWING OBSERVATION SEQUENCE:\n";
-                for (auto it = observations.begin(); it != observations.end(); ++it) {
-                    std::cout << *it << ' ';
-                }
-                std::cout << "\n\n";
-                std::cout << "----------------------------------------------------------------------" << "\n";
+                std::cout << "COMPUTING BEST PATH FOR OBSERVATION SEQUENCE OF LENGTH " << T << ".\n\n";
             }
 
             // Initalization: Probability to start in state i * probability to emit
@@ -379,8 +374,8 @@ public: // Functions
             }
 
             if (debug_mode) {
-                std::cout << "Viterbi trellis:\n" << viterbi << "\n";
-                std::cout << "Backpointer trellis:\n" << backpointer << "\n";
+                std::cout << "Size of viterbi trellis:\t" << viterbi.size1() << " x " << viterbi.size2() << "\n"
+                          << "Size of backpointer trellis:\t" << backpointer.size1() << " x " << backpointer.size2() << "\n";
             }
 
             // Get best last state by iterating over last column of viterbi matrix. 
@@ -417,7 +412,7 @@ public: // Functions
 
             // Print best path predictions:
             std::cout << "----------------------------------------------------------------------" << "\n";
-            std::cout << "THE PREDICTED TAGS ARE:\n";
+            std::cout << "THE PREDICTED TAGS ARE:\n\n";
             for (unsigned i = 0; i < path.size(); ++i) {
                 std::cout << observations[i] << "\t\t\t" << get_hidden_symbol(path[i]) << "\n";
             }
@@ -667,20 +662,22 @@ public: // Functions
     void print() const {
         std::cout << "----------------------------------------------------------------------" << "\n";
         std::cout << "HMM PROPERTIES:\n"
-                  << "Transition Matrix: " << transition_matrix << "\n\n"
-                  << "Observation Matrix: " << observation_matrix << "\n\n"
-                  << "Word Index Map:" << "\n";
-        for (auto e = word_index_map.begin(); e != word_index_map.end(); ++e) {
-            std::cout << e->first << " = " << e->second << "\n";
-        }
-        std::cout << "\nInitial Probabilities:" << "\n";
-        for (auto e = init_probs.begin(); e != init_probs.end(); ++e) {
-            std::cout << e->first << " = " << e->second << "\n";
-        }
-        std::cout << "\nState Symbol Map:" << "\n";
-        for (auto e = state_symbol_map.begin(); e != state_symbol_map.end(); ++e) {
-            std::cout << e->first << " = " << e->second << "\n";
-        }
+                  << "Number of states:\t\t" << num_of_states << "\n"  
+                  << "Number of observations:\t\t" << num_of_observations << "\n" 
+                  << "Size of transition matrix:\t" << transition_matrix.size1() << " x " << transition_matrix.size2() << "\n"
+                  << "Size of observation matrix:\t" << observation_matrix.size1() << " x " << observation_matrix.size2() << "\n";                  
+//                << "Word Index Map:" << "\n";
+//        for (auto e = word_index_map.begin(); e != word_index_map.end(); ++e) {
+//            std::cout << e->first << " = " << e->second << "\n";
+//        }
+//        std::cout << "\nInitial Probabilities:" << "\n";
+//        for (auto e = init_probs.begin(); e != init_probs.end(); ++e) {
+//            std::cout << e->first << " = " << e->second << "\n";
+//        }
+//        std::cout << "\nState Symbol Map:" << "\n";
+//        for (auto e = state_symbol_map.begin(); e != state_symbol_map.end(); ++e) {
+//            std::cout << e->first << " = " << e->second << "\n";
+//        }
         std::cout << "----------------------------------------------------------------------" << "\n";
     }
 
