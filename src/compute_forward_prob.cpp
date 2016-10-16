@@ -38,7 +38,7 @@ int main(int argc, char* argv[])
    else {
       std::cerr <<
               "USAGE: compute_forward_prob hmm_file test_file\n\n"
-              "hmm_file: File that contains the HMM. An example HMM file is included in /examples.\n"
+              "hmm_file: File that contains the HMM. Several generated example models are located in /models.\n"
               "test_file: File that contains test sentences for which the forward probabilities shall be computed.\n\n";
       exit(1);
    }

@@ -93,6 +93,8 @@ public: // Functions
         get_init_probs();                   // Collect initial probabilities 
         build_tag_state_map();              // Create map that maps a pos tag to its state index
         generate_tsv_file(outfile);         // Output tsv file that contains the HMM
+        std::cout << "HMM GENERATION FROM FILE '" << std::string(infile) << "': SUCCESSFUL.\n";
+
     }
 
 private: // Functions
