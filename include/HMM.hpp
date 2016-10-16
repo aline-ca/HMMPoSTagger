@@ -103,6 +103,8 @@ public: // Functions
             init();                             // Initialize counters
             read_in(in); // Read in HMM from file and build internal data structures
             std::cout << "HMM BUILD FROM FILE '" << file << "': SUCCESSFUL.\n";
+                    std::cout << "----------------------------------------------------------------------" << "\n";
+
             if (debug_mode) {
                 print();
             }
@@ -466,7 +468,6 @@ public: // Functions
             std::string result = get_string_repr(path);
 
             // Print best path predictions:
-            std::cout << "----------------------------------------------------------------------" << "\n";
             std::cout << "THE PREDICTED TAGS ARE:\n\n";
             for (unsigned i = 0; i < path.size(); ++i) {
                 std::cout << observations[i] << "\t\t\t" << get_hidden_symbol(path[i]) << "\n";
