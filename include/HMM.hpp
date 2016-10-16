@@ -2,7 +2,7 @@
  * File:                        HMM.hpp
  * Author:                      Aline Castendiek
  * Student ID:                  768297
- * Date:                        15/10/16
+ * Date:                        16/10/16
  * 1st operating system:        Mac OS X [El Capitan 10.11.5]  
  * 2nd operating system:        Linux [Ubuntu 3.13]     
  * 1st Compiler:                clang [3.4]
@@ -20,7 +20,6 @@
   Known issues:
     - The ~ sign cannot occur in a trained HMM as observation because it is used 
       as the line separator sign, but it may occur in the test data.
-    - Zero Probs - Forward?
 */
 
 #ifndef __HMM_HPP__
@@ -48,9 +47,6 @@ using namespace boost;
          or the forward algorithm for getting the forward probability of a sentence can be executed.
   @note The class can either process an HMM generated from the HMMGenerator class or a hand-written
         HMM.
-  @note Although add-one is used to smooth unseen transitions for all words in the training data, the
-        HMM can NOT yet handle completely unseen words in the test data. Unseen words will result in
-        a zero probability for the complete test data.
   @note The tilde sign is used as separator sign between the different phases of reading in the HMM.
         It was specifically chosen because it did not occur in any training data, including the whole
         section 02-21 of the Wall Street Journal. If a tilde occurs in the training data, the 
@@ -104,7 +100,7 @@ public: // Functions
         std::ifstream in(file.c_str());
 
         if (in) {
-            init(); // Initialize counters
+            init();                             // Initialize counters
             read_in(in); // Read in HMM from file and build internal data structures
             std::cout << "HMM BUILD FROM FILE '" << file << "': SUCCESSFUL.\n";
             if (debug_mode) {
@@ -140,10 +136,10 @@ public: // Functions
   *        Initializer Functions         *
   ***************************************/
   
-/**
+    /**
         @brief Initializes an empty matrix by writing zero into all its cells.
         @param m Reference to the matrix that shall be initialized.
-     */
+    */
     void initialize_matrix(Matrix& m) {
         for (unsigned i = 0; i < m.size1(); ++i) {
             for (unsigned j = 0; j < m.size2(); ++j) {
@@ -160,7 +156,6 @@ public: // Functions
         num_of_states = 0;
         num_of_observations = 0;
     }
-
 
     /********************************************************************
     *          Functions for Forward and Viterbi Calculations           *
@@ -197,27 +192,82 @@ public: // Functions
         // first observation (observations[0]) in state i.  
         for (unsigned i = 0; i < N; ++i) {
             // If we get the invalid word index -1, we know that the word did not occur in the training data.
-            // So the probability to start in it is zero. Right now, this will result in a zero probability for
-            // all the test data which is not very good...
+            // The actual probability to start in it would be 0, but then we will always multiply by this 0
+            // and only get zero probabilities. Because of this, use constant UNSEENWORDPROB for multiplication instead.
             if (get_word_index(observations[0]) == -1) {
                 forward_trellis(i, 0) = init_probs[i] * UNSEENWORDPROB;
             }
+            
             else {
-                forward_trellis(i, 0) = init_probs[i] * observation_matrix(i, get_word_index(observations[0]));
+                // Declare current values as variables (makes the following code easier to read)           
+                Index current_word_index = get_word_index(observations[0]);
+                double current_observation_prob = observation_matrix(i, current_word_index);
+               
+                // Handle all possible cases of zero probs (only necessary for unsmoothed models)
+                if (init_probs[i] == 0 && current_observation_prob == 0) {
+                    forward_trellis(i, 0) = UNSEENTRANSITIONPROB * UNSEENTRANSITIONPROB;
+                } else if (init_probs[i] == 0 && current_observation_prob != 0) {
+                    forward_trellis(i, 0) = UNSEENTRANSITIONPROB * current_observation_prob;
+                } else if (init_probs[i] != 0 && current_observation_prob == 0) {
+                    forward_trellis(i,0) = init_probs[i] * UNSEENTRANSITIONPROB;
+                } else { // if the model is smoothed, the actual probabilities will be used
+                    forward_trellis(i, 0) = init_probs[i] * current_observation_prob;
+                }               
             }
         }
         // Recursion Step (Iterative solution): 
-        for (unsigned t = 1; t < T; ++t) { // t represents current time step
-            for (unsigned s = 0; s < N; ++s) { // s represents current state
-                double sum = 0; // Value that will be written in current trellis cell
-                for (unsigned j = 0; j < N; ++j) { // j represents previous state
-                    // Again, test whether word has an entry in the HMM, and if not, use a zero probability.
+        for (unsigned t = 1; t < T; ++t) {                  // t represents current time step
+            for (unsigned s = 0; s < N; ++s) {              // s represents current state               
+                double sum = 0;                             // Value that will be written in current trellis cell               
+                for (unsigned j = 0; j < N; ++j) {          // j represents previous state
+
+                    // Declare current values as variables (makes the following code easier to read)           
+                    double current_transition_prob = transition_matrix(j, s);
+                    double current_observation_prob;
+                    double previous_forward_prob = forward_trellis(j, t - 1);
+                    
+                    // Again, test whether word has an entry in the HMM.
                     if (get_word_index(observations[t]) == -1) {
-                        sum += forward_trellis(j, t - 1) * transition_matrix(j, s) * UNSEENWORDPROB;
-                    } else { // Word has an entry in the HMM
+
+                        // And again, handle zero probs in unsmoothed models, else use actual probability
+                        if (current_transition_prob == 0) {
+                            sum += previous_forward_prob * UNSEENTRANSITIONPROB * UNSEENWORDPROB;
+                        } else {
+                            sum += previous_forward_prob * current_transition_prob * UNSEENWORDPROB;
+                        }                                                                     
+                    } 
+                    
+                    else { // Word has an entry in the HMM                                             
                         // Compute previous sum + forward probability at previous trellis position * transition probability from previous
-                        // to current state * probability to emit observations[t] in current state.   
-                        sum += forward_trellis(j, t - 1) * transition_matrix(j, s) * observation_matrix(s, get_word_index(observations[t]));
+                        // to current state * probability to emit observations[t] in current state. 
+                        current_observation_prob = observation_matrix(s, get_word_index(observations[t]));
+
+                        // Check for all possible zero probability combinations (will only occur if the model is unsmoothed) 
+                        if (previous_forward_prob == 0 && current_transition_prob == 0 && current_observation_prob == 0) {
+                            sum += UNSEENTRANSITIONPROB * UNSEENTRANSITIONPROB * UNSEENTRANSITIONPROB;
+                        } 
+                        else if (previous_forward_prob == 0 && current_transition_prob == 0 && current_observation_prob != 0) {
+                            sum += UNSEENTRANSITIONPROB * UNSEENTRANSITIONPROB * current_observation_prob;
+                        } 
+                        else if (previous_forward_prob != 0 && current_transition_prob == 0 && current_observation_prob == 0) {
+                            sum += previous_forward_prob * UNSEENTRANSITIONPROB * UNSEENTRANSITIONPROB;
+                        } 
+                        else if (previous_forward_prob == 0 && current_transition_prob != 0 && current_observation_prob == 0) {
+                            sum += UNSEENTRANSITIONPROB * current_transition_prob * UNSEENTRANSITIONPROB;
+                        } 
+                        else if (previous_forward_prob != 0 && current_transition_prob == 0 && current_observation_prob != 0) {
+                            sum += previous_forward_prob * UNSEENTRANSITIONPROB * current_observation_prob;
+                        } 
+                        else if (previous_forward_prob == 0 && current_transition_prob != 0 && current_observation_prob != 0) {
+                            sum += UNSEENTRANSITIONPROB * current_transition_prob * current_observation_prob;
+                        } 
+                        else if (previous_forward_prob != 0 && current_transition_prob != 0 && current_observation_prob == 0) {
+                            sum += previous_forward_prob * current_transition_prob * UNSEENTRANSITIONPROB;
+                        }
+
+                        else {  // No zero probs, use actual probabilities
+                            sum += previous_forward_prob * current_transition_prob * current_observation_prob;
+                        }                                         
                     }
                 }
                 // Write calculated value into current trellis cell. Afterwards, set sum variable back to zero.
@@ -236,6 +286,7 @@ public: // Functions
         return result;
     }
 
+    
   /***************************************
   *          Viterbi Algorithm           *
   ***************************************/
@@ -499,8 +550,7 @@ public: // Functions
         // Initialize matrices:
         initialize_matrix(transition_matrix);
         initialize_matrix(observation_matrix);
-    }
-    
+    }    
     
     /**
       @brief Reads in transitions and transition probabilities from a vector.
@@ -512,7 +562,6 @@ public: // Functions
         const double& prob = ::atof(v[2].c_str());      // Convert string to double
         transition_matrix(state1, state2) = prob;
     }
-
     
     /**
       @brief Reads in observations and observation probabilities from vector.
@@ -526,13 +575,12 @@ public: // Functions
             word_index_map.insert(std::make_pair(v[1], current_index));
             ++current_index;
         }
-        const double& prob = ::atof(v[2].c_str()); // Convert string to double
+        const double& prob = ::atof(v[2].c_str());      // Convert string to double
         const State& hidden_state = get_hidden_state(v[0]);
         const Index word_index = get_word_index(v[1]);
         // Write observation into observation matrix:
         observation_matrix(hidden_state, get_word_index(v[1])) = prob;
     }
-
     
     /**
       @brief Reads in initial probabilities from vector.
@@ -544,17 +592,15 @@ public: // Functions
         init_probs[state] = prob;
     }    
     
-    
     /**
       @brief Reads in state symbol map from vector.
       @param v Reference to the vector.
      */
     void get_symbol_state_repr(const StringVector& v) {
-        const int& state = atoi(v[0].c_str()); // Convert string to int
+        const int& state = atoi(v[0].c_str());          // Convert string to int
         state_symbol_map[state] = v[1];
         symbol_state_map[v[1]] = state;
-    }
-    
+    }  
     
     /**
       @brief Prints error message and instructions on how to use the program.
@@ -564,30 +610,8 @@ public: // Functions
         std::cerr <<
                 "An error occurred while trying to read in the HMM from a tsv file.\n"
                 "Please either use the HMMGenerator class to generate an HMM from raw data or "
-                "make sure that your hand-written HMM matches the following syntax and order:\n\n"
-
-                "1. List the transitions including transition probabilities:\n"
-                "state  state  probability. e.g.: 0  0  0.3.\n"
-                "Use a line of tildes (~~~) to end the section.\n\n"
-
-                "2. List the states and their string representations:\n"
-                "state  representation. e.g.: 1  NN \n"
-                "Use a line of tildes (~~~) to end the section.\n\n"
-
-                "3. List the observations including observation probabilities:\n"
-                "state  observation  probability. e.g.: 0  otter  0.4 \n"
-                "Use a line of tildes (~~~) to end the section.\n\n"
-
-                "4. List the initial probabilities for a state:\n\n"
-                "state  probability. e.g.: 1  0.1 \n"
-
-                "Give only ONE transition, observation, initial probability or "
-                "state-string representation per line.\n"
-                "Separate fields from each other using tabs.\n"
-                "In addition, make sure that all states are natural numbers.\n"
-                "An example of a hand-written HMM is included in /examples.\n\n";
+                "make sure that your hand-written HMM matches the syntax and order specified in the enclosed manpage.\n\n";
     }
-
 
     /**************************************************
     *           Private Getter Functions              *
@@ -655,7 +679,6 @@ public: // Functions
         return str;
     }
 
-
   /**************************************************
    *               Other Functions                 *
    *************************************************/
@@ -669,20 +692,8 @@ public: // Functions
                   << "Number of states:\t\t" << num_of_states << "\n"  
                   << "Number of observations:\t\t" << num_of_observations << "\n" 
                   << "Size of transition matrix:\t" << transition_matrix.size1() << " x " << transition_matrix.size2() << "\n"
-                  << "Size of observation matrix:\t" << observation_matrix.size1() << " x " << observation_matrix.size2() << "\n";                  
-//                << "Word Index Map:" << "\n";
-//        for (auto e = word_index_map.begin(); e != word_index_map.end(); ++e) {
-//            std::cout << e->first << " = " << e->second << "\n";
-//        }
-//        std::cout << "\nInitial Probabilities:" << "\n";
-//        for (auto e = init_probs.begin(); e != init_probs.end(); ++e) {
-//            std::cout << e->first << " = " << e->second << "\n";
-//        }
-//        std::cout << "\nState Symbol Map:" << "\n";
-//        for (auto e = state_symbol_map.begin(); e != state_symbol_map.end(); ++e) {
-//            std::cout << e->first << " = " << e->second << "\n";
-//        }
-        std::cout << "----------------------------------------------------------------------" << "\n";
+                  << "Size of observation matrix:\t" << observation_matrix.size1() << " x " << observation_matrix.size2() << "\n"                  
+                  << "----------------------------------------------------------------------" << "\n";
     }
 
     /**
@@ -690,11 +701,10 @@ public: // Functions
              sequence in a vector and returning it.
       @param in Reference to the instream object that will be read from.
       @return Vector containing the observation sequence.
-
      */
     const StringVector parse_test_data(std::istream& in) const {
-        StringVector vec; // Vector that will contain all sentences
-        std::string line; // Current line
+        StringVector vec;               // Vector that will contain all sentences
+        std::string line;               // Current line
         while (getline(in, line)) {
             vec.push_back(line);
         }

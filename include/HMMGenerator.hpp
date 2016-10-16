@@ -2,12 +2,12 @@
  * File:                        HMMGenerator.hpp
  * Author:                      Aline Castendiek
  * Student ID:                  768297
- * Date:                        30/10/15
- * 1st operating system:        Linux [Ubuntu 3.13.0-37-generic]
- * 2nd operating system:        Mac OS X [El Capitan 10.11]       
+ * Date:                        16/10/16
+ * 1st operating system:        Mac OS X [El Capitan 10.11.5]  
+ * 2nd operating system:        Linux [Ubuntu 3.13]     
  * 1st Compiler:                clang [3.4]
  * 2nd Compiler:                g++ [4.8.4]
- * Doxygen version:             1.8.6          
+ * Doxygen version:             1.8.11          
  */
 
 /* 
@@ -34,7 +34,7 @@ using namespace boost;
 
 /** 
   @brief The HMMGenerator class is used to read in a tsv file that contains words and their corresponding PoS-tags.
-         It creates a HMM from it and writes the properties of the trained HMM into a new tsv file.
+         It creates a HMM from it and writes the properties of the trained HMM into a new file.
          The HMM class can then read in the HMM and do forward/viterbi calculations.   
   @note The implemented HMM is case sensitive, e.g. "The" and "the" are seen as two different words.
   @note Futhermore, all outgoing transitions for a state add up to one (roughly) EXCEPT for the transitions from EOS 
@@ -43,37 +43,37 @@ using namespace boost;
 class HMMGenerator {
     
 public: // Types 
-    bool smoothing;                                             ///< Smoothing configuration. Set to true by default
-    double smoothing_summand;                                   ///< For smoothing computation. Set to one by default (Add-one)
+    bool    smoothing;                                                  ///< Smoothing configuration. Set to true by default
+    double  smoothing_summand;                                          ///< For smoothing computation. Set to one by default (Add-one)
 
 private: // Typedefs
-    typedef std::vector<std::string> StringVector;              ///< String vector for reading in tags and words
-    typedef std::tuple<std::string, std::string> BigramTuple;   ///< String tuple as bigram representation
-    typedef std::set<std::string> StringSet;                    ///< String set for all observed words.
-    typedef std::map<std::string, int> StringIntMap;            ///< String-to-int map for counting word occurrences
-    typedef std::map<BigramTuple, int> TupleIntMap;             ///< Tuple-to-int map for counting bigrams and observations
-    typedef std::map<std::string, double> StringDoubleMap;      ///< String-to-double map for saving initial probabilities
-    typedef std::map<BigramTuple, double> TupleDoubleMap;       ///< Tuple-to-double map for saving MLE and word likelihood
-    typedef std::map<std::string, unsigned> StringUnsignedMap;  ///< String-to-unsigned map for representing state as number
-    typedef tokenizer< char_separator<char> > Tokenizer;        ///< Boost tokenizer used for tsv file parsing
+    typedef std::vector<std::string>                StringVector;       ///< String vector for reading in tags and words
+    typedef std::tuple<std::string, std::string>    BigramTuple;        ///< String tuple as bigram representation
+    typedef std::set<std::string>                   StringSet;          ///< String set for all observed words.
+    typedef std::map<std::string, int>              StringIntMap;       ///< String-to-int map for counting word occurrences
+    typedef std::map<BigramTuple, int>              TupleIntMap;        ///< Tuple-to-int map for counting bigrams and observations
+    typedef std::map<std::string, double>           StringDoubleMap;    ///< String-to-double map for saving initial probabilities
+    typedef std::map<BigramTuple, double>           TupleDoubleMap;     ///< Tuple-to-double map for saving MLE and word likelihood
+    typedef std::map<std::string, unsigned>         StringUnsignedMap;  ///< String-to-unsigned map for representing state as number
+    typedef tokenizer< char_separator<char> >       Tokenizer;          ///< Boost tokenizer used for tsv file parsing
 
 private: // Types
-    unsigned token_counter;                                     ///< Number of all tokens in the corpus
-    StringIntMap type_counter_map;                              ///< Maps a pos tag to the number of its occurrences
-    StringVector pos_seq;                                       ///< Vector of all PoS tags in the order they occurred in the corpus
-    StringVector word_seq;                                      ///< Vector of all words in the order they occurred in the corpus
-    StringSet observed_words_set;                               ///< Set that saves all observed words
-    TupleIntMap bigram_counter_map;                             ///< Maps a bigram to the number of its occurrences 
-    TupleIntMap observation_counter_map;                        ///< Maps a tag-word-tuple to the number of its occurrences
-    TupleDoubleMap ml_map;                                      ///< Saves maximum likelihood 
-    TupleDoubleMap word_likelihood_map;                         ///< Saves word likelihood
-    StringUnsignedMap tag_state_map;                            ///< Maps a pos tag to its state representation
-    StringDoubleMap init_probs;                                 ///< Maps a pos tag to the probability to start a sentence with it
+    unsigned            token_counter;                                  ///< Number of all tokens in the corpus
+    StringIntMap        type_counter_map;                               ///< Maps a pos tag to the number of its occurrences
+    StringVector        pos_seq;                                        ///< Vector of all PoS tags in the order they occurred in the corpus
+    StringVector        word_seq;                                       ///< Vector of all words in the order they occurred in the corpus
+    StringSet           observed_words_set;                             ///< Set that saves all observed words
+    TupleIntMap         bigram_counter_map;                             ///< Maps a bigram to the number of its occurrences 
+    TupleIntMap         observation_counter_map;                        ///< Maps a tag-word-tuple to the number of its occurrences
+    TupleDoubleMap      ml_map;                                         ///< Saves maximum likelihood 
+    TupleDoubleMap      word_likelihood_map;                            ///< Saves word likelihood
+    StringUnsignedMap   tag_state_map;                                  ///< Maps a pos tag to its state representation
+    StringDoubleMap     init_probs;                                     ///< Maps a pos tag to the probability to start a sentence with it
 
 public: // Functions
     /**
       @brief Constructor that reads in a tsv file containing words and their corresponding pos-tags, 
-             does all necessary computations to create a HMM from it and outputs the HMM in tsv format.
+             does all necessary computations to create a HMM from it and writes the HMM to a file.
       @param infile Pointer to file that will be read in
       @param outfile Pointer to file in which the output will be written
       @param summand Number that will be used as summand for smoothing computations. Is set to one by default.
@@ -151,7 +151,7 @@ private: // Functions
             exit(1);
         }
     }
-
+    
     /**
       @brief Generates a tsv file that contains all properties of the HMM 
              and can be further processed by the HMM class.
