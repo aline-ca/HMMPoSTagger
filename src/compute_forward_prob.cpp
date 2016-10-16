@@ -1,14 +1,15 @@
 /* 
- * File:                        compute_forward_prob.cpp
+ * File:                        compute_forward_prob.hpp
  * Author:                      Aline Castendiek
  * Student ID:                  768297
- * Date:                        30/10/15
- * 1st operating system:        Linux [Ubuntu 3.13.0-37-generic]
- * 2nd operating system:        Mac OS X [El Capitan 10.11]       
+ * Date:                        16/10/16
+ * 1st operating system:        Mac OS X [El Capitan 10.11.5]  
+ * 2nd operating system:        Linux [Ubuntu 3.13]     
  * 1st Compiler:                clang [3.4]
  * 2nd Compiler:                g++ [4.8.4]
- * Doxygen version:             1.8.6          
+ * Doxygen version:             1.8.11          
  */
+
 
 
 #ifndef __COMPUTE_FORWARD_PROB_CPP__
@@ -19,14 +20,6 @@
 
 typedef std::vector<double> DoubleVector; ///< Vector of double values
 
-void print_vector_elements(DoubleVector elements)
-{
-   std::cout << "[ ";
-   for (auto it = elements.begin(); it != elements.end(); it++) {
-      std::cout << *it << ", ";
-   }
-   std::cout << " ]";
-}
 
 int main(int argc, char* argv[])
 {
@@ -38,11 +31,10 @@ int main(int argc, char* argv[])
 
       /// Set debugging parameter to true to enable debugging.
       // HMM hmm(argv[1], true);
-      DoubleVector forward_probs = hmm.get_forward_probs(argv[2]);
-
-      print_vector_elements(forward_probs);
-
+      
+      DoubleVector forward_probs = hmm.get_forward_probs(argv[2]);   
    }
+   
    else {
       std::cerr <<
               "USAGE: compute_forward_prob hmm_file test_file\n\n"

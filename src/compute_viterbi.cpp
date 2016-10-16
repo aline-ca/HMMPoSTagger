@@ -1,14 +1,15 @@
 /* 
- * File:                        compute_viterbi.cpp
+ * File:                        compute_viterbi.hpp
  * Author:                      Aline Castendiek
  * Student ID:                  768297
- * Date:                        30/10/15
- * 1st operating system:        Linux [Ubuntu 3.13.0-37-generic]
- * 2nd operating system:        Mac OS X [El Capitan 10.11]       
+ * Date:                        16/10/16
+ * 1st operating system:        Mac OS X [El Capitan 10.11.5]  
+ * 2nd operating system:        Linux [Ubuntu 3.13]     
  * 1st Compiler:                clang [3.4]
  * 2nd Compiler:                g++ [4.8.4]
- * Doxygen version:             1.8.6          
+ * Doxygen version:             1.8.11          
  */
+
 
 
 #ifndef __COMPUTE_VITERBI_CPP__
